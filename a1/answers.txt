@@ -1,0 +1,30 @@
+1.Are there any parts of the original WordCount that still confuse you? If so, what?
+No. At first I was confused about the input and output data types, but then I got more familiar with them as "*Writable" types are what we need for input and output, and ".set()" and "context.write()" often come as pairs to output the result. Now I feel more clear about the code.
+
+
+
+2.How did the output change when you submitted with -D mapreduce.job.reduces=3? Why would this be necessary if your job produced large output sets?
+(1) It outputs multiple parts in the output directory like "part-r-00000", "part-r-00001", "part-r-00002".
+(2) The reduce time slots increase from 0 to (ms)=1227, but the all maps time slots decrease from (ms)68744 to (ms)49691. So, overall it saves total time a little bit.
+(3) It can reduce the risk if one of them die.
+There are mainly 3 reasons why we need to use more reduces when it comes to a large output sets. (1) It can save a lot of time as we increase the parallelism. (2) It reduce the overall risk of losing one of them. (3)It can work If we do not have enough disk storage for the whole output as they can be stored in different spaces.   
+
+
+
+3.How was the -D mapreduce.job.reduces=0 output different?
+(1) The output has only one part.
+(2) The log shows that it takes slightly longer time on mapping and whole process on our reddit-1 dataset.
+
+
+
+4.Was there any noticeable difference in the running time of your RedditAverage with and without the combiner optimization?
+Not really. Actually the  time consumed without combiner runs a little faster, (ms)=60367. As it has no extra burden for combining. But this is because the dataset Reddit we have is too small and we can hardly see the difference. I believe the combiner can save us lot of time when it comes to large datasets. 	
+
+
+
+
+
+
+
+
+
