@@ -1,0 +1,21 @@
+1. In the WikipediaPopular class, it would be much more interesting to find the page that is most popular, not just the view count (as we did with Spark). What would be necessary to modify your class to do this? (You don't have to actually implement it.)
+We should modify the output data and data type at the mapper, and we should modify both the input and output data and data type at the reducer as well. Because we not only care about the view count, but also the page title. So we have to create a class that can contain both page title and view count. For example, the class can be like PageCountWritable(String, long), containing the pairs of (title, view_count). Thus, at the mapper, it would be like Mapper<LongWritable, Text, Text, PageCountWritable>. The Text key of the output at the mapper should be set as date_time, while PageCountWritable should be set as (title, view_count) pairs. Then all of them will be included in the context.write(). At the reducer, both input and output should be modified. and the reducer should be like Reducer<Text, PageCountWritable, Text, PageCountWritable>. Needless to say the input of reducer should be compatible with the output of the mapper. After the calculation of the most views, the pair (date_time, (title, views_count)) can be set into context.write(). Similarly, no matter which information we are interested in, we should always concern about the input and output of mapper and reducer as well as their datatypes.       
+
+
+
+2. An RDD has many methods: it can do many more useful tricks than were at hand with MapReduce. Write a sentence or two to explain the difference between .map and .flatMap. Which is more like the MapReduce concept of mapping?
+.map outputs same amount of output as the number of input whereas .flatMap flattens those outputs into arbitrary lists. 
+As to which is more like the MapReduce concept of mapping. I think .map is more like it when it comes to project like word count. The output result of mapping in MapReduce is still a set of tuples, they are not a list yet. However in other projects it is not the case when the the pairs can be shuffled and combined which is more like what we can do with a list.
+
+
+
+3. Do the same for .reduce and .reduceByKey. Which is more like the MapReduce concept of reducing?
+.reduce aggregates a data set (RDD) element using a function. That function takes two arguments and returns one final value.
+.reduceByKey on the other hand returns one value for each key. 
+Clearly .reduceByKey is more like the MapReduce concept of reducing.
+
+
+
+
+4. When finding popular Wikipedia pages, the maximum number of page views is certainly unique, but the most popular page might be a tie. What would your improved Python implementation do if there were two pages with the same highest number of page views in an hour? What would be necessary to make your code find all of the pages views the maximum number of times? (Again, you don't have to actually implement this.)
+The simple way we can do is to keep the output pair format as written in the code (date_time, (view_count, title)). The trick here is we can change the title, I mean add another title here when the view_count are the same. It is easy to realize by simply changing the "title1" as "title1 and title2" in the comparing the most views function, if there is a tie.
