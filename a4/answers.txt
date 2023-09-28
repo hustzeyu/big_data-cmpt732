@@ -1,0 +1,47 @@
+1.How much of a difference did the .cache() make in your Reddit ETL code?
+Reddit-2 with cache(), the running time is:
+real    0m27.672s
+user    0m16.688s
+sys     0m1.376s
+Reddit-2 without cache(), the running time is:
+real    0m32.575s
+user    0m17.559s
+sys     0m1.504s
+Its 5s faster for having cache() on reddit-2, if it is a much larger dataset, then I believe it will save more time using cache().
+Reddit-3 with cache(), the running time is:
+real    0m36.315s
+user    0m22.123s
+sys     0m1.610s
+Reddit-3 without cache(), the running time is:
+real    0m41.287s
+user    0m22.205s
+sys     0m1.690s
+Reddit-4 with cache(), the running time is:
+real    0m48.927s
+user    0m21.766s
+sys     0m1.523s
+Reddit-4 without cache(), the running time is:
+real    0m57.486s
+user    0m22.192s
+sys     0m1.701s
+Which is 9s slower than the one with cache()
+
+
+
+2.When would .cache() make code slower than without?
+(a)When there are too much in the cache, which is above the limit of memory of the executors you set, then some of them will be stored in hdfs. During the running process, extra IO burden will slow down the process when use .cache(),  which will make it slower than without. 
+(b)When the temp rdd in cache will not be used very frequently, then it will waste the limited memory we have, it will be worth it when the temp rdd is used frequently. If we are out of memory, then, extra IO burden will slow down the process.     
+
+
+
+3.Under what conditions will the broadcast join be faster than an actual join?
+When the data we put in the memory is limited that our memory is big enough to handle it, and the data we are dealing with in the broadcast join will be used frequently later, than it will be faster than an actual join as in the actual join, in which we need spend more time to get the data to different nodes. Thus if the data we are broadcasting is very small we can send them to very node, which saves time.  
+
+
+4.When will the broadcast join be slower?
+When the data we need to broadcast join are too much and the memory of the executors are not enough to deal with it, then we will have to do the shuffle and with extra IO burden, which will make it slower. 
+
+
+
+
+
