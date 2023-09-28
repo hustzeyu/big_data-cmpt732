@@ -1,0 +1,54 @@
+1.What was wrong with the original wordcount-5 data set that made repartitioning worth it? Why did the program run faster after?
+The original wordcount-5 has 8 items and we can see one of it is much larger than others:
+-rw-r--r--   3 ggbaker supergroup  272333102 2020-12-16 09:13 /courses/732/wordcount-5/7.txt.gz
+-rw-r--r--   3 ggbaker supergroup      93397 2020-12-16 09:03 /courses/732/wordcount-5/F.txt.gz
+-rw-r--r--   3 ggbaker supergroup      84223 2020-12-16 09:58 /courses/732/wordcount-5/S.txt.gz
+-rw-r--r--   3 ggbaker supergroup   44054520 2020-12-16 09:57 /courses/732/wordcount-5/d.txt.gz
+-rw-r--r--   3 ggbaker supergroup   93890605 2020-12-16 09:32 /courses/732/wordcount-5/g.txt.gz
+-rw-r--r--   3 ggbaker supergroup  116015482 2020-12-16 09:41 /courses/732/wordcount-5/m.txt.gz
+-rw-r--r--   3 ggbaker supergroup   19394837 2020-12-16 09:30 /courses/732/wordcount-5/o.txt.gz
+-rw-r--r--   3 ggbaker supergroup   79300825 2020-12-16 10:00 /courses/732/wordcount-5/s.txt.gz
+So other executors will wait until the longest one finishes its job. 
+However, if repartitioned, the input files will be of equal size which in turn will give even computing load to those executors.
+
+
+
+2.The same fix does not make this code run faster on the wordcount-3 data set. (It may be slightly slower?) Why? [For once, the answer is not “the data set is too small”.]
+Well according to my result, using one partition (took 18s) which is much faster than 8 partitions (took 2min10s) the word count-3 contains 101 items, which means the computing load can be flexibly evenly distributed to the executors. But if we add repartition(), it would not make it more even, but wasting time on the repartition these files.
+
+
+
+3.How could you modify the wordcount-5 input so that the word count code can process it and get the same results as fast as possible? (It's possible to get about another minute off the running time.)
+We can use something like sc.textFile('courses/732/wordcount-5').repartition(120).saveAsTextFile('new-wordcount-5').
+
+
+4.When experimenting with the number of partitions while estimating Euler's constant, you likely didn't see much difference for a range of values, and chose the final value in your code somewhere in that range. What range of partitions numbers was “good” (on the desktop/laptop where you were testing)?
+As you can see the time are quite similar when the number is small, the best is 8, I guess it because I have 8 cores. 
+16: 12.90s user 0.74s 
+8:  8.00s user 0.56s   -------  lowest
+4:  8.35s user 0.59s 
+2:  8.56s user 0.63s 
+1:  9.09s user 0.68s 
+256: 17.38s user 1.01s 
+
+
+5.How much overhead does it seem like Spark adds to a job? How much speedup did PyPy get over the usual Python implementation?
+For spark standard python, the time need for Euler for 8 partitions is:
+real    1m58.970s
+user    0m17.113s
+sys     0m1.360s
+For spark one with PYPY, the time need for Euler for 8 partitions is:
+real    0m45.422s
+user    0m16.459s
+sys     0m1.104s
+PYPY is 1m13s faster than standard python one.
+The Non-Spark single-threaded PyPy takes:
+real    1m29.543s
+user    1m28.427s
+sys     0m0.199s
+So, with PYPY, even it is non-spark, it is still 20s faster than spark standard python one. But it is 45s slower than spark one with PYPY.
+Non-Spark single-threaded C:
+real    0m42.387s
+user    0m41.502s
+sys     0m0.160s
+Which is relatively fast.
