@@ -1,0 +1,23 @@
+Take a screen shot of your list of EMR clusters (if more than one page, only the page with the most recent), showing that all have Terminated status.
+
+For Section 2:
+
+What fraction of the input file was prefiltered by S3 before it was sent to Spark?
+1 - 97.7 KiB / 2.6 MiB =1 - 3.67% = 96.33%
+
+
+
+Comparing the different input numbers for the regular version versus the prefiltered one, what operations were performed by S3 and which ones performed in Spark?
+S3 performed filter part and spark performed "/10" the calculation part.
+
+
+
+For Section 3:
+
+Reviewing the job times in the Spark history, which operations took the most time? Is the application IO-bound or compute-bound?
+
+In school cluster, it took 24min to run reddit the most time cost in spark is reduceBy(), while in AWS, it took 4.1 min and the most time cost step on AWS is collect(). The right and read took over 2 mins in total. I think this application IO bound as Write, read, reduceBy and sortBy all evolves with IO, and those part took a lot of time.
+
+Look up the hourly costs of the m6gd.xlarge instance on the EC2 On-Demand Pricing page. Estimate the cost of processing a dataset ten times as large as reddit-5 using just those 4 instances. If you wanted instead to process this larger dataset making full use of 16 instances, how would it have to be organized?
+It took 4 min to calculate  4*4.1*10*$0.1808/60 = $0.5 
+If it is 16 instances and each has 4 core, then the total would be 16*4=64, then we should repartition the input into N*64 (where N = 2 or 3) evenly so that each core would be taken full advantage.
