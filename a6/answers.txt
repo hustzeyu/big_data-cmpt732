@@ -1,0 +1,102 @@
+1.In the Reddit averages execution plan, which fields were loaded? How was the average computed (and was a combiner-like step done)?
+In the ReadSchema, it shows: struct<score:bigint,subreddit:string>, so "score" and "subreddit" are loaded. As for combiner-like step, first the HashAggregate(keys=[subreddit#18] was running, then Exchange hashpartitioning(subreddit#18, 200) was running to shuffle, then final HashAggregate(keys=[subreddit#18], functions=[avg(score#16L)]) was running to combine the result. 
+
+
+2.What was the running time for your Reddit averages implementations in the five scenarios described above? How much difference did Python implementation make (PyPy vs the default CPython)? Why was it large for RDDs but not for DataFrames?
+For mapReduce the running time is:
+real    3m55.225s
+user    0m6.745s
+sys     0m0.745s
+For Spark DataFrames (with CPython), the running time is:
+real    1m50.273s
+user    0m29.281s
+sys     0m1.761s
+For Spark RDDs (with CPython), the running time is:
+real    6m58.759s
+user    0m20.566s
+sys     0m1.910s
+For Spark DataFrames (with PyPy), the running time is:
+real    1m26.578s
+user    0m29.849s
+sys     0m2.031s
+For Spark RDDs (with PyPy), the running time is:
+real    5m57.856s
+user    0m23.397s
+sys     0m1.832s
+The difference between PyPy and CPython is that, PyPy is always faster than CPython according the result. For DataFrame: the PyPy one is about 25s faster than CPython. For RDD: the PyPy one is about 1min faster than CPython. The reason why RDD is slower is because for data frame, all manipulation is done in JVM, while for RDD, all work was done by passing the data back to python code.
+
+
+
+3.How much of a difference did the broadcast hint make to the Wikipedia popular code's running time (and on what data set)?
+On page count-2, with broadcast, the running time is:
+real    1m45.587s
+user    0m33.244s
+sys     0m1.973s
+On page count-2, without broadcast, the running time is:
+real    2m33.314s
+user    0m34.249s
+sys     0m2.006s
+So with broadcast join, it is 48s faster on page count-2.
+
+
+4.How did the Wikipedia popular execution plan differ with and without the broadcast hint?
+Without broadcast, the plan is:
+== Physical Plan ==
+*(6) Project [hour#73, title#22, views#2L]
++- *(6) SortMergeJoin [date_hour#15, views#2L], [hour#73, max_views#70L], Inner
+   :- *(2) Sort [date_hour#15 ASC NULLS FIRST, views#2L ASC NULLS FIRST], false, 0
+   :  +- Exchange hashpartitioning(date_hour#15, views#2L, 200), ENSURE_REQUIREMENTS, [id=#67]
+   :     +- *(1) Filter (isnotnull(date_hour#15) AND isnotnull(views#2L))
+   :        +- InMemoryTableScan [title#22, views#2L, date_hour#15], [isnotnull(date_hour#15), isnotnull(views#2L)]
+   :              +- InMemoryRelation [language#0, title#22, views#2L, size#3, filename#8, date_hour#15], StorageLevel(disk, memory, deserialized, 1 replicas)
+   :                    +- *(2) Project [language#0, Main_Page#1 AS title#22, views#2L, size#3, filename#8, pythonUDF0#29 AS date_hour#15]
+   :                       +- BatchEvalPython [path_to_hour(filename#8)], [pythonUDF0#29]
+   :                          +- *(1) Project [language#0, Main_Page#1, views#2L, size#3, input_file_name() AS filename#8]
+   :                             +- *(1) Filter ((((isnotnull(language#0) AND isnotnull(Main_Page#1)) AND (language#0 = en)) AND (StartsWith(Main_Page#1, Special:) = false)) AND NOT (Main_Page#1 = Main_Page))
+   :                                +- FileScan csv [language#0,Main_Page#1,views#2L,size#3] Batched: false, DataFilters: [isnotnull(language#0), isnotnull(Main_Page#1), (language#0 = en), (StartsWith(Main_Page#1, Speci..., Format: CSV, Location: InMemoryFileIndex[hdfs://controller.local:54310/courses/732/pagecounts-2], PartitionFilters: [], PushedFilters: [IsNotNull(language), IsNotNull(Main_Page), EqualTo(language,en), Not(EqualTo(Main_Page,Main_Page))], ReadSchema: struct<language:string,Main_Page:string,views:bigint,size:double>
+   +- *(5) Sort [hour#73 ASC NULLS FIRST, max_views#70L ASC NULLS FIRST], false, 0
+      +- Exchange hashpartitioning(hour#73, max_views#70L, 200), ENSURE_REQUIREMENTS, [id=#81]
+         +- *(4) Filter isnotnull(max_views#70L)
+            +- *(4) HashAggregate(keys=[date_hour#15], functions=[max(views#2L)])
+               +- Exchange hashpartitioning(date_hour#15, 200), ENSURE_REQUIREMENTS, [id=#76]
+                  +- *(3) HashAggregate(keys=[date_hour#15], functions=[partial_max(views#2L)])
+                     +- *(3) Filter isnotnull(date_hour#15)
+                        +- InMemoryTableScan [views#2L, date_hour#15], [isnotnull(date_hour#15)]
+                              +- InMemoryRelation [language#0, title#22, views#2L, size#3, filename#8, date_hour#15], StorageLevel(disk, memory, deserialized, 1 replicas)
+                                    +- *(2) Project [language#0, Main_Page#1 AS title#22, views#2L, size#3, filename#8, pythonUDF0#29 AS date_hour#15]
+                                       +- BatchEvalPython [path_to_hour(filename#8)], [pythonUDF0#29]
+                                          +- *(1) Project [language#0, Main_Page#1, views#2L, size#3, input_file_name() AS filename#8]
+                                             +- *(1) Filter ((((isnotnull(language#0) AND isnotnull(Main_Page#1)) AND (language#0 = en)) AND (StartsWith(Main_Page#1, Special:) = false)) AND NOT (Main_Page#1 = Main_Page))
+                                                +- FileScan csv [language#0,Main_Page#1,views#2L,size#3] Batched: false, DataFilters.
+
+With broadcast, the plan is:
+== Physical Plan ==
+*(3) Project [hour#73, title#22, views#2L]
++- *(3) BroadcastHashJoin [date_hour#15, views#2L], [hour#73, max_views#70L], Inner, BuildRight, false
+   :- *(3) Filter (isnotnull(date_hour#15) AND isnotnull(views#2L))
+   :  +- InMemoryTableScan [title#22, views#2L, date_hour#15], [isnotnull(date_hour#15), isnotnull(views#2L)]
+   :        +- InMemoryRelation [language#0, title#22, views#2L, size#3, filename#8, date_hour#15], StorageLevel(disk, memory, deserialized, 1 replicas)
+   :              +- *(2) Project [language#0, Main_Page#1 AS title#22, views#2L, size#3, filename#8, pythonUDF0#29 AS date_hour#15]
+   :                 +- BatchEvalPython [path_to_hour(filename#8)], [pythonUDF0#29]
+   :                    +- *(1) Project [language#0, Main_Page#1, views#2L, size#3, input_file_name() AS filename#8]
+   :                       +- *(1) Filter ((((isnotnull(language#0) AND isnotnull(Main_Page#1)) AND (language#0 = en)) AND (StartsWith(Main_Page#1, Special:) = false)) AND NOT (Main_Page#1 = Main_Page))
+   :                          +- FileScan csv [language#0,Main_Page#1,views#2L,size#3] Batched: false, DataFilters: [isnotnull(language#0), isnotnull(Main_Page#1), (language#0 = en), (StartsWith(Main_Page#1, Speci..., Format: CSV, Location: InMemoryFileIndex[hdfs://controller.local:54310/courses/732/pagecounts-2], PartitionFilters: [], PushedFilters: [IsNotNull(language), IsNotNull(Main_Page), EqualTo(language,en), Not(EqualTo(Main_Page,Main_Page))], ReadSchema: struct<language:string,Main_Page:string,views:bigint,size:double>
+   +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, string, true], input[1, bigint, false]),false), [id=#71]
+      +- *(2) Filter isnotnull(max_views#70L)
+         +- *(2) HashAggregate(keys=[date_hour#15], functions=[max(views#2L)])
+            +- Exchange hashpartitioning(date_hour#15, 200), ENSURE_REQUIREMENTS, [id=#66]
+               +- *(1) HashAggregate(keys=[date_hour#15], functions=[partial_max(views#2L)])
+                  +- *(1) Filter isnotnull(date_hour#15)
+                     +- InMemoryTableScan [views#2L, date_hour#15], [isnotnull(date_hour#15)]
+                           +- InMemoryRelation [language#0, title#22, views#2L, size#3, filename#8, date_hour#15], StorageLevel(disk, memory, deserialized, 1 replicas)
+                                 +- *(2) Project [language#0, Main_Page#1 AS title#22, views#2L, size#3, filename#8, pythonUDF0#29 AS date_hour#15]
+                                    +- BatchEvalPython [path_to_hour(filename#8)], [pythonUDF0#29]
+                                       +- *(1) Project [language#0, Main_Page#1, views#2L, size#3, input_file_name() AS filename#8]
+                                          +- *(1) Filter ((((isnotnull(language#0) AND isnotnull(Main_Page#1)) AND (language#0 = en)) AND (StartsWith(Main_Page#1, Special:) = false)) AND NOT (Main_Page#1 = Main_Page))
+                                             +- FileScan csv [language#0,Main_Page#1,views#2L,size#3] Batched: false, DataFilters: [isnotnull(language#0), isnotnull(Main_Page#1), (language#0 = en), (StartsWith(Main_Page#1, Speci..., Format: CSV, Location: InMemoryFileIndex[hdfs://controller.local:54310/courses/732/pagecounts-2], PartitionFilters: [], PushedFilters: [IsNotNull(language), IsNotNull(Main_Page), EqualTo(language,en), Not(EqualTo(Main_Page,Main_Page))], ReadSchema: struct<language:string,Main_Page:string,views:bigint,size:double>
+We can see that in the broadcast process, the plan shows:"BroadcastHashJoin [date_hour#15, views#2L], [hour#73, max_views#70L], Inner, BuildRight, false", while in without broadcast programme, the plan shows "SortMergeJoin [date_hour#15, views#2L], [hour#73, max_views#70L], Inner".
+
+
+
+5.For the weather data question, did you prefer writing the “DataFrames + Python methods” style, or the “temp tables + SQL syntax” style form solving the problem? Which do you think produces more readable code?
+Personally, I prefer “temp tables + SQL syntax”, its more obvious as I am comfortable with sql and the manipulation on table is easy to see.
