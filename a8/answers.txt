@@ -1,0 +1,39 @@
+1.What happened when you inserted another row with the same primary key as an existing row?
+The new row inserted would replace the old row with the same primary key. 
+
+2.What happened when you query a keyspace with replication factor 1 and one node down? How did it behave with replication factor 2 and a node down?
+When query a keyspace with replication factor 1 and one node down, I could not access to the data (where id=2) stored on the unreliable node as there was no extra copy of the data on other node. When the replication factor is 2, then I was able to access all the data.
+
+3.How did the consistency level affect the results with the node up/down?
+When the consistency is all and with the node down, when I tried to access to id=2 the error showed:"NoHostAvailable: ('Unable to complete the operation against any hosts', {<Host: 10.17.202.217:9042 datacenter1>: Unavailable('Error from server: code=1000 [Unavailable exception] message="Cannot achieve consistency level ALL" info={\'consistency\': \'ALL\', \'required_replicas\': 2, \'alive_replicas\': 0}')})". When the node was up, I did not see any problem. When the node is up, the consistency level does no make a difference.
+
+4.Which of the WHERE id=? values returned successfully with CONSISTENCY ALL when one of the nodes was down? Why do you think some could be returned but not others?
+When id= 1,4,5	I was able to get the data successfully with CONSISTENCY ALL when one of the nodes was down. But not when id=2,3 (the error showed :"NoHostAvailable: ('Unable to complete the operation against any hosts', {<Host: 10.17.202.217:9042 datacenter1>: Unavailable('Error from server: code=1000 [Unavailable exception] message="Cannot achieve consistency level ALL" info={\'consistency\': \'ALL\', \'required_replicas\': 2, \'alive_replicas\': 1}')})") The reason might be that the data I was querying has been stored on one down node and on one normal node at the same time. So when consistency was all, there would be a problem.
+
+5.What was the CREATE TABLE statement you used for the nasalogs table? What was the primary key you choose, and why?
+CREATE TABLE nasalogs (
+  host TEXT,
+  datetime TIMESTAMP,
+  path TEXT,
+  bytes INT,
+  uuid TEXT,
+  PRIMARY KEY (host, uuid)
+);
+PRIMARY KEY (host, uuid) because host is not unique but uuid is, the tuple is certainly unique.
+
+6.What was the CQL query you used (or tried) to get the total number of bytes?
+The CQL I used is "SELECT host AS host, SUM(bytes) AS bytes FROM nasalogs GROUP BY host;" It can be successfully run on nasalogs-1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
