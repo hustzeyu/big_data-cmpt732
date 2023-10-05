@@ -1,0 +1,100 @@
+QUESTION 1: DEBIT OR CREDIT? Do people from Ontario tend to put larger purchases on one payment method?
+a.Prose answer to the question:
+Yes people in Ontario tend to put larger average purchase on credit ($8 more than debit), as we can see from the following table:
+average_purchase_amount   payment_method
+121.45	                  credit
+113.44	                  debit
+b. Your query used to arrive at this answer:
+select (avg(t3.amount)) as average_purchase_amount , t2.mtype as payment_method
+from purchases as t3 join paymentmethods as t2 on (t3.custid = t2.custid)
+join customers as t1 on (t3.custid = t1.custid)
+where t1.province='ON'
+group by t2.mtype; 
+
+
+QUESTION 2: WHO SPENDS MORE OVERALL? Consider the three groups of people: people who live in the Vancouver region, visitors from other BC areas, and visitors from outside BC altogether. Which group spent the most per transaction?
+a. An answer to the original question in prose:
+People who live outside BC spend more per transaction, as we can see from the following table, the average purchase is over $100. 
+from_bc_non_van  From_Van  count   average   median
+0	         1	  10384	  86.01	   27.370
+1	         0	  3899	  95.16	   30.080
+0	         0	  15717	  112.89	   33.270
+
+b. A SQL statement to create the required view:
+CREATE VIEW vancouver_custs AS
+WITH 
+  vprefixes (vp) AS 
+    (SELECT DISTINCT pcprefix FROM greater_vancouver_prefixes)
+SELECT customers.custid, ( CASE WHEN (substring(customers.postalcode,1, 3)=vprefixes.vp) THEN 1
+                ELSE 0
+                END      )AS in_vancouver
+FROM customers left outer join vprefixes on (substring(customers.postalcode,1, 3)=vprefixes.vp);
+
+c. A SQL query to support your answer for component a:
+CREATE VIEW From_BC_non_Van_custs AS
+SELECT customers.custid, ( CASE WHEN ((vancouver_custs.in_vancouver = 0) and (customers.province = 'BC'))  THEN 1
+                ELSE 0
+                END      )AS From_BC_non_Van
+FROM customers inner join vancouver_custs ON (customers.custid = vancouver_custs.custid);
+
+SELECT From_BC_non_Van_custs.From_BC_non_Van as From_BC_non_Van, 
+        vancouver_custs.in_vancouver as From_Van, 
+        (COUNT(*)) as Count,  
+        (AVG(purchases.amount)) as Average, 
+        (median(purchases.amount)) as Median
+FROM  From_BC_non_Van_custs join vancouver_custs on (From_BC_non_Van_custs.custid = vancouver_custs.custid)
+join purchases on (From_BC_non_Van_custs.custid = purchases.custid)
+group by From_BC_non_Van_custs.From_BC_non_Van, vancouver_custs.in_vancouver
+order by Median;
+
+QUESTION 3: WHO SPENDS MORE ON SUSHI?
+a. An answer to the original question in prose:
+People who are not in Vancouver spend more on sushi ($8 more than people in Vancouver). As we can see from the following:
+avg     in_vancouver
+78.56	0
+70.24	1
+b. A SQL query to support your answer for component a:
+WITH 
+  sushi (amenid ) AS 
+    (SELECT amenid FROM amenities where(tags.cuisine ilike '%sushi%'))
+SELECT (avg(purchases.amount)) as avg,
+        vancouver_custs.in_vancouver as in_vancouver
+FROM purchases left join vancouver_custs on (purchases.custid = vancouver_custs.custid)
+    left join sushi on (purchases.amenid = sushi.amenid)
+where (purchases.amenid = sushi.amenid)
+group by in_vancouver
+order by in_vancouver;
+
+Question 4: Average purchase per day for the first five days?
+What was the average purchase per day for the first five days of August?
+a. An answer to the original question in prose:
+As we can see from the following table:
+pdate            avg
+2021-08-01	96.59
+2021-08-02	106.56
+2021-08-03	95.87
+2021-08-04	115.50
+2021-08-05	95.67
+
+b. A SQL query for Redshift to support your answer for component a:
+select pdate, (avg(amount)) as avg 
+from purchases
+where (date_part(mon,pdate)=08 and date_part(d,pdate) between 1 and 5)
+group by pdate
+order by pdate;
+
+c. What was the bytes / record ratio for Redshift on the 5-day query?
+Bytes/record = 94.06K/4703 = 20 (bytes/record)
+
+d. What was the bytes / record ratio for Spectrum on the 5-day query?
+267396 bytes/ 4703 = 56.86 (bytes/record)
+
+e. For this purchase dataset, the averages are 57 bytes/line and 968 lines/day. (It may be useful to explore the public-cmpt-732 bucket to derive these for yourself.) From these values, what might you infer about how Redshift scans the table? How Spectrum scans the table?
+The Redshift only scan the records we need as we calculated only 20(bytes/record), while Spectrum scans the full records. This is because we can do select in Redshift, Redshift is has schema and can filter, thus we can select the record we want. While for spectrum, some data are unstructured thus it has to scan all the data, so the ratio is much larger. But for spectrum Amazon do parallelism.
+
+f. Based on these computations and the parallelism results, what properties of a dataset might make it well-suited to loading from S3 into Redshift before querying it?
+Dataset which is large and you only need part of the data which need frequent query action. Then Redshift is a good choice. And we can select what we need in Redshift. 
+
+g. Conversely, what properties of a dataset might make it well-suited to retaining in S3 and querying it using Spectrum?
+If the querying action is not too frequent, and the dataset is not too big, and you need the whole dataset then S3 is a good choice. As it charges on your "actual use". Amazon is paying for parallelism.
+
